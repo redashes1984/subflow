@@ -18,95 +18,136 @@ Subflow 的参数映射不应是工程猜测，而应基于人类大脑如何调
 
 ---
 
-## 2. Biological Mechanisms → LLM Parameter Mapping
+## 2. Complete LLM Sampling Parameters (vLLM/OpenAI SDK)
 
-### 2.1 多巴胺系统（Dopaminergic System）→ Temperature
+**Full Parameter Space:**
 
-**生物学事实：**
-- 多巴胺不是"快乐分子"，而是**预测误差信号**（Prediction Error Signal）
-- 高多巴胺 → 更高的探索倾向（Exploration），更少的局部最优陷阱
-- 低多巴胺 → 更高的利用倾向（Exploitation），更保守的决策
-- VTA（腹侧被盖区）→ 前额叶通路控制风险偏好
+| 参数 | vLLM 支持 | 默认值 | 取值范围 | 功能描述 |
+|------|----------|--------|---------|---------|
+| `temperature` | ✅ | 1.0 | 0.0-2.0 | 采样温度，控制随机性 |
+| `top_p` | ✅ | 1.0 | 0.0-1.0 | 核采样，累积概率阈值 |
+| `top_k` | ✅ | -1 (全) | -1-∞ | 前K采样，候选范围 |
+| `min_p` | ✅ | 0.0 | 0.0-1.0 | 最小概率采样（vLLM特有） |
+| `top_a` | ✅ | 0.0 | 0.0-1.0 | 前A采样（vLLM特有） |
+| `typical_p` | ✅ | 1.0 | 0.0-1.0 | 典型采样 |
+| `seed` | ✅ | None | int | 随机种子 |
+| `repetition_penalty` | ✅ | 1.0 | 0.0-2.0 | 重复惩罚 |
+| `frequency_penalty` | ✅ | 0.0 | -2.0-2.0 | 频率惩罚（OpenAI） |
+| `presence_penalty` | ✅ | 0.0 | -2.0-2.0 | 存在性惩罚（OpenAI） |
+| `guided_decoding` | ✅ | None | json/regex/grammar | 引导解码（结构化输出） |
+| `max_tokens` | ✅ | None | int | 最大输出长度 |
+| `min_tokens` | ✅ | 0 | int | 最小输出长度 |
+| `stop` | ✅ | None | str/list | 停止词 |
+| `n` | ✅ | 1 | int | 生成数量 |
+| `best_of` | ✅ | 1 | int | 最佳选择 |
+| `use_beam_search` | ✅ | False | bool | 束搜索 |
+| `length_penalty` | ✅ | 1.0 | float | 长度惩罚 |
+| `early_stopping` | ✅ | True | bool/float | 早期停止 |
 
-**LLM 映射：**
+**Subflow 可映射的参数（核心）：**
 ```
-Temperature ≈ 多巴胺驱动的探索概率
-
-高信任/安全感 → 多巴胺释放 → Temperature ↑ → 更多探索
-高恐惧/威胁感 → 多巴胺抑制 → Temperature ↓ → 保守利用
+1. temperature     → 探索度（多巴胺）
+2. top_p           → 确定性（前额叶抑制）
+3. top_k           → 注意力宽度（杏仁核）
+4. min_p           → 最低置信度阈值（海马体过滤）
+5. typical_p       → 典型性偏好（基底核习惯系统）
+6. repetition_penalty → 重复厌恶（工作记忆）
+7. frequency_penalty → 频率调节（新鲜感）
+8. presence_penalty → 新颖性追求（多巴胺新奇偏好）
+9. guided_decoding → 理性约束（前额叶执行控制）
+10. max_tokens     → 思维深度/输出耐心（注意力持久性）
 ```
-
-**证据：**
-- 人类在安全环境中更愿意尝试新策略（温度高）
-- 人类在威胁环境中倾向于已知策略（温度低）
-- ADHD（多巴胺调节异常）患者的行为模式类似高 temperature 采样
-
-### 2.2 杏仁核（Amygdala）→ Top_k
-
-**生物学事实：**
-- 杏仁核是恐惧/威胁检测中心
-- 高杏仁核激活 → 注意力窄化（Attentional Narrowing）→ 只关注威胁相关刺激
-- 低杏仁核激活 → 注意力扩展（Attentional Broadening）→ 接收更多环境信息
-- 进化意义：逃跑时不需要处理无关信息
-
-**LLM 映射：**
-```
-Top_k ≈ 注意力窗口的候选范围
-
-高恐惧 → 杏仁核激活 → 注意力窄化 → Top_k ↓（只采样最可能的词）
-低恐惧 → 注意力扩展 → Top_k ↑（探索更多可能性）
-```
-
-**证据：**
-- 恐惧状态下的人类视野会缩小（tunnel vision）
-- 焦虑症患者的注意力范围显著缩小
-- 冥想降低杏仁核活性，扩大认知灵活性
-
-### 2.3 前额叶皮层（PFC）→ Top_p
-
-**生物学事实：**
-- 前额叶是理性/抑制控制中心
-- PFC 抑制冲动 → 只选择高置信度选项
-- PFC 放松控制 → 允许低概率想法浮现
-- 酒精/疲劳降低 PFC 功能 → 行为更"失控"
-
-**LLM 映射：**
-```
-Top_p ≈ 理性抑制的累积概率阈值
-
-高理性/信任 → PFC 适度抑制 → Top_p ↑（保留更多可能性）
-高冲动/恐惧 → PFC 抑制减弱 → Top_p ↓（只选最高概率）
-```
-
-**证据：**
-- 理性状态下的人类能考虑更多选项
-- 情绪失控时人类只做出最直接的反应
-- 创造性思维需要适度降低理性抑制
-
-### 2.4 默认模式网络（DMN）→ Seed / Dream Mode
-
-**生物学事实：**
-- DMN（Default Mode Network）在休息/走神时最活跃
-- DMN 负责自传体记忆、情景模拟、自由联想
-- 梦境是 DMN 的极端状态——无外部输入下的内部连接
-- 创造力与 DMN 活跃度正相关
-
-**LLM 映射：**
-```
-Seed / Dream Mode ≈ 默认模式网络的激活程度
-
-DMN 高活跃 → 固定 seed 或特定随机种子 → 可追踪的梦境叙事
-DMN 低活跃 → 完全随机 seed → 正常采样
-```
-
-**证据：**
-- 走神/白日梦时人类产生更多创意想法
-- 创造性突破常发生在"放松"状态下（淋浴时、睡前）
-- 精神分裂症患者的 DMN 过度活跃 → 幻觉
 
 ---
 
-## 3. Neurochemical State Machine
+## 3. Neuro-Biological Mapping: 10 Parameters × Brain Systems
+
+### 3.1 Temperature → 多巴胺系统（Dopaminergic System）
+
+**生物学：** 多巴胺不是"快乐分子"，而是**预测误差信号**。高多巴胺→探索倾向↑，低多巴胺→保守利用↑。VTA→前额叶通路控制风险偏好。
+
+```
+temperature = 0.7 + 0.3*max(0,trust-0.5) - 0.4*max(0,fear-0.5)
+```
+- 信任/安全感→多巴胺释放→Temperature↑
+- 恐惧/威胁→多巴胺抑制→Temperature↓
+
+### 3.2 Top_p → 前额叶皮层（PFC - 理性抑制）
+
+**生物学：** PFC 是理性/抑制控制中心。PFC强→只选高置信度选项，PFC弱→允许低概率想法浮现。酒精/疲劳/恐惧降低 PFC 功能。
+
+```
+top_p = 0.9 + 0.05*max(0,trust-0.5) - 0.08*max(0,fear-0.6)
+```
+
+### 3.3 Top_k → 杏仁核（Amygdala - 注意力宽度）
+
+**生物学：** 杏仁核是威胁检测中心。高激活→注意力窄化（tunnel vision），低激活→注意力扩展。恐惧时视野缩小是进化优势。
+
+```
+top_k = 50 - 80*max(0,fear-0.4) + 100*max(0,tension-0.2)
+```
+
+### 3.4 Min_p → 海马体（Hippocampus - 最低置信度过滤）
+
+**生物学：** 海马体过滤无关信息，只有达到最低置信度的记忆才会被提取。min_p 是"这个想法至少要有 X% 的可能性才值得考虑"。
+
+```
+min_p = 0.01 + 0.05*max(0,fear-0.5)  # 恐惧时过滤更严格
+```
+
+### 3.5 Typical_p → 基底核（Basal Ganglia - 习惯/典型性）
+
+**生物学：** 基底核存储习惯和行为模式。高 typical_p→偏好"典型/习惯"的选项，低 typical_p→愿意打破常规。
+
+```
+typical_p = 0.8 - 0.3*max(0,tension-0.4)  # 矛盾高时打破习惯
+```
+
+### 3.6 Repetition Penalty → 工作记忆（Working Memory）
+
+**生物学：** 前额叶-顶叶网络的工作记忆检测重复。厌恶重复是人类的基本认知特征（boredom response）。
+
+```
+repetition_penalty = 1.0 + 0.3*max(0,boredom-0.5)  # 无聊时更讨厌重复
+```
+
+### 3.7 Frequency Penalty → 新鲜感系统（Novelty Seeking）
+
+**生物学：** 多巴胺系统对新异刺激有偏好（novelty bonus）。频率惩罚模拟"说过的就不想再说"。
+
+```
+frequency_penalty = 0.0 + 0.5*max(0,trust-0.6)  # 信任高时更愿意说新话
+```
+
+### 3.8 Presence Penalty → 探索-利用平衡（Exploration-Exploitation）
+
+**生物学：** 海马体-前额叶网络在"说已知"和"说未知"之间平衡。存在性惩罚偏向未出现过的主题。
+
+```
+presence_penalty = 0.0 + 0.3*max(0,tension-0.3)  # 矛盾时探索新主题
+```
+
+### 3.9 Guided Decoding → 前额叶执行控制（Executive Control）
+
+**生物学：** PFC 的背外侧区域负责执行功能——遵守规则、结构化思考。guided_decoding 强制输出符合特定格式。
+
+```
+guided_decoding = None  # 默认自由输出
+                 = "json"  # 高恐惧时强制结构化（减少幻觉）
+```
+
+### 3.10 Max_tokens → 注意力持久性（Attentional Persistence）
+
+**生物学：** 注意力持久性与多巴胺和去甲肾上腺素的平衡相关。高恐惧→注意力涣散（max_tokens↓），高信任→深度思考（max_tokens↑）。
+
+```
+max_tokens = 4096 - 1024*max(0,fear-0.7) + 2048*max(0,trust-0.7)
+```
+
+---
+
+## 4. Neurochemical State Machine
 
 **人类的情绪状态不是单一维度，而是神经化学物质的组合：**
 
